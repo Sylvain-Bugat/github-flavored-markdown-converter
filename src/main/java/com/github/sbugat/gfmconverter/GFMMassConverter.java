@@ -1,15 +1,17 @@
 package com.github.sbugat.gfmconverter;
 
-import java.io.BufferedWriter;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.InputStream;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 
+import org.eclipse.egit.github.core.Repository;
 import org.eclipse.egit.github.core.client.GitHubClient;
 import org.eclipse.egit.github.core.service.MarkdownService;
+import org.eclipse.egit.github.core.service.RepositoryService;
 
 
 /**
@@ -27,6 +29,40 @@ public class GFMMassConverter {
 		}
 	};
 
+	private final GFMMassConverterConfiguration gFMMassConverterConfiguration;
+
+	private final GitHubClient gitHubClient;
+
+	private final Repository gitHubProjectRepository;
+
+	private final MarkdownService markdownService;
+
+	public GFMMassConverter() throws IOException {
+
+		gFMMassConverterConfiguration = new GFMMassConverterConfiguration();
+
+		//GitHub client with optional authentication token
+		gitHubClient = new GitHubClient();
+		final String authenticationToken = gFMMassConverterConfiguration.getGFMAuthenticationToken();
+		if( null != authenticationToken && ! authenticationToken.isEmpty() ) {
+			gitHubClient.setOAuth2Token( authenticationToken );
+		}
+
+		final String gitHubUser = gFMMassConverterConfiguration.getGFMGitHubUser();
+		final String gitHubProjet = gFMMassConverterConfiguration.getGFMGitHubRepository();
+
+		//Get the optional repository configured
+		if( null != gitHubUser && ! gitHubUser.isEmpty() && null != gitHubProjet && ! gitHubProjet.isEmpty() ) {
+
+			final RepositoryService repositoryService = new RepositoryService( gitHubClient );
+			gitHubProjectRepository = repositoryService.getRepository( gitHubUser, gitHubProjet );
+		}
+		else {
+			gitHubProjectRepository = null;
+		}
+
+		markdownService = new MarkdownService( gitHubClient );
+	}
 
 	/**
 	 * Open and convert a markdown file
@@ -41,17 +77,21 @@ public class GFMMassConverter {
 		}
 
 		final byte[] rawFileContent = Files.readAllBytes( path );
-		final String fileContent = new String( rawFileContent, StandardCharsets.UTF_8 );
-
-		final GitHubClient gitHubClient = new GitHubClient();
-		final MarkdownService markdownService = new MarkdownService( gitHubClient );
-		final String html = markdownService.getHtml( fileContent, MarkdownService.MODE_GFM );
+		final String fileContent = new String( rawFileContent, gFMMassConverterConfiguration.getGFMFileEncoding() );
 
 		final Path htmlPath = Paths.get( path.toString().replaceFirst( ".md$", ".html" ) );
 
-		try( final BufferedWriter BufferedWriter = Files.newBufferedWriter( htmlPath, StandardCharsets.ISO_8859_1 ) ) {
+		if( null != gitHubProjectRepository ) {
+			try( final InputStream markdownStream = markdownService.getRepositoryStream( gitHubProjectRepository, fileContent ) ) {
 
-			BufferedWriter.write( html );
+				Files.copy( markdownStream, htmlPath, StandardCopyOption.REPLACE_EXISTING );
+			}
+		}
+		else {
+			try( final InputStream markdownStream = markdownService.getStream( fileContent, MarkdownService.MODE_MARKDOWN ) ) {
+
+				Files.copy( markdownStream, htmlPath, StandardCopyOption.REPLACE_EXISTING );
+			}
 		}
 	}
 
