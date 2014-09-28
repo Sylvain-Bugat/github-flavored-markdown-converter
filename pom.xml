@@ -23,7 +23,7 @@
 		<maven.compiler.target>1.7</maven.compiler.target>
 
 		<!-- GitHub Client -->
-		<github.client>3.5.0.201409071800-rc1</github.client>
+		<github.client>3.5.0.201409260305-r</github.client>
 
 		<!-- Google GSON (used/required by GitHub Client)-->
 		<gson.client>2.3</gson.client>
